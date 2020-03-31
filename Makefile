@@ -4,4 +4,4 @@ edi: editor.c
 .PHONY: clean
 
 clean: 
-	rm -r target
+	rm edi.o
