@@ -5,7 +5,11 @@
 #include <ctype.h>
 #include <errno.h>
 
+/* global data */
+
 struct termios original_terminal_state;
+
+/* terminal configuration */
 
 void die(const char* s){
   perror(s);
@@ -33,7 +37,7 @@ void enable_raw_mode() {
   if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
-
+/* init */
 
 int main() {
   enable_raw_mode();
