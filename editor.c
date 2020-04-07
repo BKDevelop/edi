@@ -3,15 +3,23 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 
 struct termios original_terminal_state;
 
+void die(const char* s){
+  perror(s);
+  exit(EXIT_FAILURE);
+}
+
 void disable_raw_mode() {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminal_state);
+  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminal_state) == -1) {
+    die("tcsetattr");
+  }
 }
 
 void enable_raw_mode() {
-  tcgetattr(STDIN_FILENO, &original_terminal_state);
+  if(tcgetattr(STDIN_FILENO, &original_terminal_state) == -1) die("tcgetattr");
   atexit(disable_raw_mode);
 
   struct termios raw = original_terminal_state;
@@ -22,7 +30,7 @@ void enable_raw_mode() {
   raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 1;
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
 
@@ -31,7 +39,7 @@ int main() {
   enable_raw_mode();
   char c = '\0';
   for(;;){
-    read(STDIN_FILENO, &c, 1);
+    if(read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
     if(c == 'q') break;
 
     if(iscntrl(c)){
