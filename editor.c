@@ -5,6 +5,10 @@
 #include <ctype.h>
 #include <errno.h>
 
+/* defines */
+
+#define CTRL_KEY(k) ((k) & 0x1f)
+
 /* global data */
 
 struct termios original_terminal_state;
@@ -44,7 +48,7 @@ int main() {
   char c = '\0';
   for(;;){
     if(read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
-    if(c == 'q') break;
+    if(c == CTRL_KEY('q')) break;
 
     if(iscntrl(c)){
       printf("%d\r\n", c);
