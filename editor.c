@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdbool.h>
 
 /* defines */
 
@@ -14,8 +15,18 @@
 struct termios original_terminal_state;
 
 /* terminal configuration */
+void reposition_cursor(){
+  write(STDOUT_FILENO, "\x1b[H", 4); //move cursor to top left
+}
+
+void clear_screen(){
+  write(STDOUT_FILENO, "\x1b[2J", 4); //clear
+  reposition_cursor();
+}
 
 void die(const char* s){
+  clear_screen();
+
   perror(s);
   exit(EXIT_FAILURE);
 }
@@ -56,15 +67,32 @@ void process_keypress(){
 
   switch(c) {
     case CTRL_KEY('q'):
+      clear_screen();
       exit(EXIT_SUCCESS);
   }
 }
+
+/* output */
+
+void draw_rows(){
+  for(int y = 0; y < 24; y++){
+    write(STDOUT_FILENO, "~\r\n", 3); // add ~ to left hand side
+  }
+}
+
+void refresh_screen(){
+  clear_screen();
+  draw_rows();
+  reposition_cursor();
+}
+
 
 /* init */
 
 int main() {
   enable_raw_mode();
-  for(;;){
+  while(true){
+    refresh_screen();
     process_keypress();
   }
   disable_raw_mode();
