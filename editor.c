@@ -41,20 +41,31 @@ void enable_raw_mode() {
   if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
+/* input */
+
+char read_keypress(){
+  int read_return;
+  char c;
+  while((read_return = read(STDIN_FILENO, &c, 1)) != 1){
+    if(read_return == -1 && errno != EAGAIN) die("read");
+  }
+  return c;
+}
+void process_keypress(){
+  char c = read_keypress();
+
+  switch(c) {
+    case CTRL_KEY('q'):
+      exit(EXIT_SUCCESS);
+  }
+}
+
 /* init */
 
 int main() {
   enable_raw_mode();
-  char c = '\0';
   for(;;){
-    if(read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
-    if(c == CTRL_KEY('q')) break;
-
-    if(iscntrl(c)){
-      printf("%d\r\n", c);
-    } else {
-      printf("%d ('%c')\r\n", c, c);
-    }
+    process_keypress();
   }
   disable_raw_mode();
   return EXIT_SUCCESS;
