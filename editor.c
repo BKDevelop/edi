@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <sys/ioctl.h>
 
 /* defines */
 
@@ -12,7 +13,13 @@
 
 /* global data */
 
-struct termios original_terminal_state;
+struct editor_config {
+  int screen_rows;
+  int screen_cols;
+  struct termios original_terminal_state;
+};
+
+struct editor_config EDITOR;
 
 /* terminal configuration */
 void reposition_cursor(){
@@ -32,16 +39,16 @@ void die(const char* s){
 }
 
 void disable_raw_mode() {
-  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_terminal_state) == -1) {
+  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &EDITOR.original_terminal_state) == -1) {
     die("tcsetattr");
   }
 }
 
 void enable_raw_mode() {
-  if(tcgetattr(STDIN_FILENO, &original_terminal_state) == -1) die("tcgetattr");
+  if(tcgetattr(STDIN_FILENO, &EDITOR.original_terminal_state) == -1) die("tcgetattr");
   atexit(disable_raw_mode);
 
-  struct termios raw = original_terminal_state;
+  struct termios raw = EDITOR.original_terminal_state;
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   raw.c_iflag &= ~(ICRNL | IXON);
   raw.c_oflag &= ~(OPOST);
@@ -50,6 +57,19 @@ void enable_raw_mode() {
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 1;
   if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
+}
+
+int get_window_size(int* rows, int* cols){
+  struct winsize ws;
+
+  if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0){
+    return -1;
+  } else {
+    *rows = ws.ws_row;
+    *cols = ws.ws_col;
+    return 0;
+  }
+
 }
 
 /* input */
@@ -89,8 +109,15 @@ void refresh_screen(){
 
 /* init */
 
+void init_editor(){
+  if(get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1) die("get_window_size");
+}
+
 int main() {
   enable_raw_mode();
+  init_editor();
+  printf("%d, %d\n", EDITOR.screen_rows,EDITOR.screen_cols);
+
   while(true){
     refresh_screen();
     process_keypress();
