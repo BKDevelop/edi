@@ -9,11 +9,12 @@
 
 /* defines */
 
-#define CTRL_KEY(k) ((k) & 0x1f)
+#define CTRL_KEY(k) ((k)&0x1f)
 
 /* global data */
 
-struct editor_config {
+struct editor_config
+{
   int screen_rows;
   int screen_cols;
   struct termios original_terminal_state;
@@ -22,30 +23,37 @@ struct editor_config {
 struct editor_config EDITOR;
 
 /* terminal configuration */
-void reposition_cursor(){
+void reposition_cursor()
+{
   write(STDOUT_FILENO, "\x1b[H", 4); //move cursor to top left
 }
 
-void clear_screen(){
+void clear_screen()
+{
   write(STDOUT_FILENO, "\x1b[2J", 4); //clear
   reposition_cursor();
 }
 
-void die(const char* s){
+void die(const char *s)
+{
   clear_screen();
 
   perror(s);
   exit(EXIT_FAILURE);
 }
 
-void disable_raw_mode() {
-  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &EDITOR.original_terminal_state) == -1) {
+void disable_raw_mode()
+{
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &EDITOR.original_terminal_state) == -1)
+  {
     die("tcsetattr");
   }
 }
 
-void enable_raw_mode() {
-  if(tcgetattr(STDIN_FILENO, &EDITOR.original_terminal_state) == -1) die("tcgetattr");
+void enable_raw_mode()
+{
+  if (tcgetattr(STDIN_FILENO, &EDITOR.original_terminal_state) == -1)
+    die("tcgetattr");
   atexit(disable_raw_mode);
 
   struct termios raw = EDITOR.original_terminal_state;
@@ -56,73 +64,87 @@ void enable_raw_mode() {
   raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 1;
-  if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1)
+    die("tcsetattr");
 }
 
-int get_window_size(int* rows, int* cols){
+int get_window_size(int *rows, int *cols)
+{
   struct winsize ws;
 
-  if(ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0){
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
+  {
     return -1;
-  } else {
+  }
+  else
+  {
     *rows = ws.ws_row;
     *cols = ws.ws_col;
     return 0;
   }
-
 }
 
 /* input */
 
-char read_keypress(){
+char read_keypress()
+{
   int read_return;
   char c;
-  while((read_return = read(STDIN_FILENO, &c, 1)) != 1){
-    if(read_return == -1 && errno != EAGAIN) die("read");
+  while ((read_return = read(STDIN_FILENO, &c, 1)) != 1)
+  {
+    if (read_return == -1 && errno != EAGAIN)
+      die("read");
   }
   return c;
 }
-void process_keypress(){
+void process_keypress()
+{
   char c = read_keypress();
 
-  switch(c) {
-    case CTRL_KEY('q'):
-      clear_screen();
-      exit(EXIT_SUCCESS);
+  switch (c)
+  {
+  case CTRL_KEY('q'):
+    clear_screen();
+    exit(EXIT_SUCCESS);
   }
 }
 
 /* output */
 
-void draw_rows(){
-  for(int y = 0; y < 24; y++){
+void draw_rows()
+{
+  for (int y = 0; y < 24; y++)
+  {
     write(STDOUT_FILENO, "~\r\n", 3); // add ~ to left hand side
   }
 }
 
-void refresh_screen(){
+void refresh_screen()
+{
   clear_screen();
   draw_rows();
   reposition_cursor();
 }
 
-
 /* init */
 
-void init_editor(){
-  if(get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1) die("get_window_size");
+void init_editor()
+{
+  if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
+    die("get_window_size");
 }
 
-int main() {
+int main()
+{
   enable_raw_mode();
   init_editor();
-  printf("%d, %d\n", EDITOR.screen_rows,EDITOR.screen_cols);
+  printf("%d, %d\n", EDITOR.screen_rows, EDITOR.screen_cols);
 
-  while(true){
+  while (true)
+  {
     refresh_screen();
     process_keypress();
   }
   disable_raw_mode();
   return EXIT_SUCCESS;
 }
-
