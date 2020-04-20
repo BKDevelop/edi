@@ -1,11 +1,11 @@
-#include <unistd.h>
-#include <termios.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
 
 /* defines */
 
@@ -13,8 +13,7 @@
 
 /* global data */
 
-struct editor_config
-{
+struct editor_config {
   int screen_rows;
   int screen_cols;
   struct termios original_terminal_state;
@@ -22,36 +21,34 @@ struct editor_config
 
 struct editor_config EDITOR;
 
+/*  function prototypes */
+char read_keypress();
+
 /* terminal configuration */
-void reposition_cursor()
-{
-  write(STDOUT_FILENO, "\x1b[H", 4); //move cursor to top left
+void reposition_cursor() {
+  write(STDOUT_FILENO, "\x1b[H", 4); // move cursor to top left
 }
 
-void clear_screen()
-{
-  write(STDOUT_FILENO, "\x1b[2J", 4); //clear
+void clear_screen() {
+  write(STDOUT_FILENO, "\x1b[2J", 4); // clear
   reposition_cursor();
 }
 
-void die(const char *s)
-{
+void die(const char *s) {
   clear_screen();
 
   perror(s);
   exit(EXIT_FAILURE);
 }
 
-void disable_raw_mode()
-{
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &EDITOR.original_terminal_state) == -1)
-  {
+void disable_raw_mode() {
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &EDITOR.original_terminal_state) ==
+      -1) {
     die("tcsetattr");
   }
 }
 
-void enable_raw_mode()
-{
+void enable_raw_mode() {
   if (tcgetattr(STDIN_FILENO, &EDITOR.original_terminal_state) == -1)
     die("tcgetattr");
   atexit(disable_raw_mode);
@@ -68,16 +65,37 @@ void enable_raw_mode()
     die("tcsetattr");
 }
 
-int get_window_size(int *rows, int *cols)
-{
+int get_cursor_position(int *rows, int *cols) {
+  if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4)
+    return -1;
+
+  char buffer[32];
+  unsigned int i = 0;
+  while (i < sizeof(buffer) - 1) {
+    if (read(STDIN_FILENO, &buffer[i], 1) != 1)
+      break;
+    if (buffer[i] == 'R')
+      break;
+    i++;
+  }
+  buffer[i] = '\0';
+
+  if (buffer[0] != '\x1b' || buffer[1] != '[')
+    return -1;
+  if (sscanf(&buffer[2], "%d;%d", rows, cols) != 2)
+    return -1;
+
+  return 0;
+}
+
+int get_window_size(int *rows, int *cols) {
   struct winsize ws;
 
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
-  {
-    return -1;
-  }
-  else
-  {
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12)
+      return -1;
+    return get_cursor_position(rows, cols);
+  } else {
     *rows = ws.ws_row;
     *cols = ws.ws_col;
     return 0;
@@ -86,23 +104,19 @@ int get_window_size(int *rows, int *cols)
 
 /* input */
 
-char read_keypress()
-{
+char read_keypress() {
   int read_return;
   char c;
-  while ((read_return = read(STDIN_FILENO, &c, 1)) != 1)
-  {
+  while ((read_return = read(STDIN_FILENO, &c, 1)) != 1) {
     if (read_return == -1 && errno != EAGAIN)
       die("read");
   }
   return c;
 }
-void process_keypress()
-{
+void process_keypress() {
   char c = read_keypress();
 
-  switch (c)
-  {
+  switch (c) {
   case CTRL_KEY('q'):
     clear_screen();
     exit(EXIT_SUCCESS);
@@ -111,16 +125,16 @@ void process_keypress()
 
 /* output */
 
-void draw_rows()
-{
-  for (int y = 0; y < 24; y++)
-  {
-    write(STDOUT_FILENO, "~\r\n", 3); // add ~ to left hand side
+void draw_rows() {
+  for (int y = 0; y < EDITOR.screen_rows; y++) {
+    write(STDOUT_FILENO, "~", 3); // add ~ to left hand side
+    if (y < EDITOR.screen_rows - 1) {
+      write(STDOUT_FILENO, "\r\n", 2);
+    }
   }
 }
 
-void refresh_screen()
-{
+void refresh_screen() {
   clear_screen();
   draw_rows();
   reposition_cursor();
@@ -128,20 +142,17 @@ void refresh_screen()
 
 /* init */
 
-void init_editor()
-{
+void init_editor() {
   if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
     die("get_window_size");
 }
 
-int main()
-{
+int main() {
   enable_raw_mode();
   init_editor();
   printf("%d, %d\n", EDITOR.screen_rows, EDITOR.screen_cols);
 
-  while (true)
-  {
+  while (true) {
     refresh_screen();
     process_keypress();
   }
