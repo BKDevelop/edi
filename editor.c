@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -21,21 +22,38 @@ struct editor_config {
 
 struct editor_config EDITOR;
 
-/*  function prototypes */
+/*  prototypes */
+struct append_buffer;
+
 char read_keypress();
+void append_buffer_append();
 
 /* terminal configuration */
-void reposition_cursor() {
-  write(STDOUT_FILENO, "\x1b[H", 4); // move cursor to top left
+void reposition_cursor(struct append_buffer *ab) {
+  append_buffer_append(ab, "\x1b[H", 3); // move cursor to top left
 }
 
-void clear_screen() {
+void clear_screen(struct append_buffer *ab) {
+  append_buffer_append(ab, "\x1b[2J", 4); // clear
+  reposition_cursor(ab);
+}
+
+void hide_cursor(struct append_buffer *ab) {
+  append_buffer_append(ab, "\x1b[?25l", 6);
+}
+
+void show_cursor(struct append_buffer *ab) {
+  append_buffer_append(ab, "\x1b[?25h", 6);
+}
+
+void clear_screen_for_quit() {
   write(STDOUT_FILENO, "\x1b[2J", 4); // clear
-  reposition_cursor();
+  write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to top left
 }
 
 void die(const char *s) {
-  clear_screen();
+  write(STDOUT_FILENO, "\x1b[2J", 4); // clear
+  write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to top left
 
   perror(s);
   exit(EXIT_FAILURE);
@@ -102,6 +120,28 @@ int get_window_size(int *rows, int *cols) {
   }
 }
 
+/*  append buffer */
+
+struct append_buffer {
+  char *b;
+  int len;
+};
+
+#define ABUF_INIT { NULL, 0 }
+
+void append_buffer_append(struct append_buffer *ab, const char *append_s,
+                          int append_len) {
+  char *new = realloc(ab->b, ab->len + append_len);
+
+  if (new == NULL)
+    return;
+  memcpy(&new[ab->len], append_s, append_len);
+  ab->b = new;
+  ab->len += append_len;
+}
+
+void append_buffer_free(struct append_buffer *ab) { free(ab->b); }
+
 /* input */
 
 char read_keypress() {
@@ -118,26 +158,35 @@ void process_keypress() {
 
   switch (c) {
   case CTRL_KEY('q'):
-    clear_screen();
+    clear_screen_for_quit();
     exit(EXIT_SUCCESS);
   }
 }
 
 /* output */
 
-void draw_rows() {
+void write_buffer(struct append_buffer *ab) {
+  write(STDOUT_FILENO, ab->b, ab->len);
+  append_buffer_free(ab);
+}
+void draw_rows(struct append_buffer *ab) {
   for (int y = 0; y < EDITOR.screen_rows; y++) {
-    write(STDOUT_FILENO, "~", 3); // add ~ to left hand side
+    append_buffer_append(ab, "~", 3); // add ~ to left hand side
+
+    append_buffer_append(ab, "\x1b[K", 3); //clear line
     if (y < EDITOR.screen_rows - 1) {
-      write(STDOUT_FILENO, "\r\n", 2);
+      append_buffer_append(ab, "\r\n", 2);
     }
   }
 }
 
 void refresh_screen() {
-  clear_screen();
-  draw_rows();
-  reposition_cursor();
+  struct append_buffer ab = ABUF_INIT;
+  hide_cursor(&ab);
+  draw_rows(&ab);
+  reposition_cursor(&ab);
+  show_cursor(&ab);
+  write_buffer(&ab);
 }
 
 /* init */
