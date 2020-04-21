@@ -10,6 +10,7 @@
 
 /* defines */
 
+#define EDI_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k)&0x1f)
 
 /* global data */
@@ -127,7 +128,8 @@ struct append_buffer {
   int len;
 };
 
-#define ABUF_INIT { NULL, 0 }
+#define ABUF_INIT                                                              \
+  { NULL, 0 }
 
 void append_buffer_append(struct append_buffer *ab, const char *append_s,
                           int append_len) {
@@ -153,6 +155,7 @@ char read_keypress() {
   }
   return c;
 }
+
 void process_keypress() {
   char c = read_keypress();
 
@@ -169,11 +172,37 @@ void write_buffer(struct append_buffer *ab) {
   write(STDOUT_FILENO, ab->b, ab->len);
   append_buffer_free(ab);
 }
+
+void draw_welcome_message(struct append_buffer *ab) {
+  char welcome_string[80];
+  int welcome_length =
+      snprintf(welcome_string, sizeof(welcome_string),
+               "Edi - a small text editor -- Version: %s", EDI_VERSION);
+
+  if (welcome_length > EDITOR.screen_cols)
+    welcome_length = EDITOR.screen_cols;
+  int padding = (EDITOR.screen_cols - welcome_length) / 2;
+  if (padding) {
+    append_buffer_append(ab, "~", 1);
+    padding--;
+  }
+  while (padding) {
+    append_buffer_append(ab, " ", 1);
+    padding--;
+  }
+
+  append_buffer_append(ab, welcome_string, welcome_length);
+}
+
 void draw_rows(struct append_buffer *ab) {
   for (int y = 0; y < EDITOR.screen_rows; y++) {
-    append_buffer_append(ab, "~", 3); // add ~ to left hand side
+    if (y == EDITOR.screen_rows / 3) {
+      draw_welcome_message(ab);
+    } else {
+      append_buffer_append(ab, "~", 1); // add ~ to left hand side
+    }
 
-    append_buffer_append(ab, "\x1b[K", 3); //clear line
+    append_buffer_append(ab, "\x1b[K", 3); // clear line
     if (y < EDITOR.screen_rows - 1) {
       append_buffer_append(ab, "\r\n", 2);
     }
