@@ -13,11 +13,18 @@
 #define EDI_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k)&0x1f)
 
+enum editor_keys {
+  ARROW_UP = 1000,
+  ARROW_DOWN = 1001,
+  ARROW_RIGHT = 1002,
+  ARROW_LEFT = 1003
+};
 /* global data */
 
 struct editor_config {
-  int screen_rows;
-  int screen_cols;
+  int cursor_x, cursor_y;
+  int screen_rows, screen_cols;
+
   struct termios original_terminal_state;
 };
 
@@ -26,12 +33,19 @@ struct editor_config EDITOR;
 /*  prototypes */
 struct append_buffer;
 
-char read_keypress();
+int read_keypress();
 void append_buffer_append();
 
 /* terminal configuration */
+
+void reposition_cursor_at(struct append_buffer *ab, int x, int y) {
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "\x1b[%d;%dH", y, x);
+  append_buffer_append(ab, buffer, strlen(buffer)); // move cursor to top left
+}
+
 void reposition_cursor(struct append_buffer *ab) {
-  append_buffer_append(ab, "\x1b[H", 3); // move cursor to top left
+  reposition_cursor_at(ab, 1, 1); // move cursor to top left
 }
 
 void clear_screen(struct append_buffer *ab) {
@@ -146,23 +160,87 @@ void append_buffer_free(struct append_buffer *ab) { free(ab->b); }
 
 /* input */
 
-char read_keypress() {
+void move_cursor(int key_pressed) {
+  switch (key_pressed) {
+  case ARROW_LEFT:
+    if (EDITOR.cursor_x > 0)
+      EDITOR.cursor_x--;
+    break;
+
+  case ARROW_DOWN:
+    if (EDITOR.cursor_y < EDITOR.screen_rows - 1)
+      EDITOR.cursor_y++;
+    break;
+
+  case ARROW_UP:
+    if (EDITOR.cursor_y > 0)
+      EDITOR.cursor_y--;
+    break;
+
+  case ARROW_RIGHT:
+    if (EDITOR.cursor_x < EDITOR.screen_cols - 1)
+      EDITOR.cursor_x++;
+    break;
+
+  default:
+    break;
+  }
+}
+
+int read_keypress() {
   int read_return;
   char c;
   while ((read_return = read(STDIN_FILENO, &c, 1)) != 1) {
     if (read_return == -1 && errno != EAGAIN)
       die("read");
   }
-  return c;
+
+  // hanlde escape sequences
+  char esc = '\x1b';
+
+  if (c == esc) {
+    char sequence[3];
+    if ((read_return = read(STDIN_FILENO, &sequence[0], 1)) != 1)
+      return esc;
+    if ((read_return = read(STDIN_FILENO, &sequence[1], 1)) != 1)
+      return esc;
+
+    if (sequence[0] != '[')
+      return esc;
+
+    switch (sequence[1]) {
+    // remap ArrowKeys for movement
+    case 'A':
+      return ARROW_UP;
+    case 'B':
+      return ARROW_DOWN;
+    case 'C':
+      return ARROW_RIGHT;
+    case 'D':
+      return ARROW_LEFT;
+    default:
+      return esc;
+    }
+
+  } else {
+    return c;
+  }
 }
 
 void process_keypress() {
-  char c = read_keypress();
+  int key_pressed = read_keypress();
 
-  switch (c) {
+  switch (key_pressed) {
   case CTRL_KEY('q'):
     clear_screen_for_quit();
     exit(EXIT_SUCCESS);
+  // movement keys
+  case ARROW_UP:
+  case ARROW_DOWN:
+  case ARROW_RIGHT:
+  case ARROW_LEFT:
+    move_cursor(key_pressed);
+    break;
   }
 }
 
@@ -213,7 +291,7 @@ void refresh_screen() {
   struct append_buffer ab = ABUF_INIT;
   hide_cursor(&ab);
   draw_rows(&ab);
-  reposition_cursor(&ab);
+  reposition_cursor_at(&ab, EDITOR.cursor_x, EDITOR.cursor_y);
   show_cursor(&ab);
   write_buffer(&ab);
 }
@@ -221,6 +299,9 @@ void refresh_screen() {
 /* init */
 
 void init_editor() {
+  EDITOR.cursor_x = 0;
+  EDITOR.cursor_y = 0;
+
   if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
     die("get_window_size");
 }
@@ -228,7 +309,6 @@ void init_editor() {
 int main() {
   enable_raw_mode();
   init_editor();
-  printf("%d, %d\n", EDITOR.screen_rows, EDITOR.screen_cols);
 
   while (true) {
     refresh_screen();
