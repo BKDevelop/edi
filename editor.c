@@ -14,10 +14,15 @@
 #define CTRL_KEY(k) ((k)&0x1f)
 
 enum editor_keys {
-  ARROW_UP = 1000,
-  ARROW_DOWN = 1001,
-  ARROW_RIGHT = 1002,
-  ARROW_LEFT = 1003
+  ARROW_UP = 1000, // integer enum in c does auto increment
+  ARROW_DOWN,
+  ARROW_RIGHT,
+  ARROW_LEFT,
+  DEL_KEY,
+  HOME_KEY,
+  END_KEY,
+  PAGE_UP,
+  PAGE_DOWN
 };
 /* global data */
 
@@ -205,23 +210,52 @@ int read_keypress() {
     if ((read_return = read(STDIN_FILENO, &sequence[1], 1)) != 1)
       return esc;
 
-    if (sequence[0] != '[')
-      return esc;
-
-    switch (sequence[1]) {
-    // remap ArrowKeys for movement
-    case 'A':
-      return ARROW_UP;
-    case 'B':
-      return ARROW_DOWN;
-    case 'C':
-      return ARROW_RIGHT;
-    case 'D':
-      return ARROW_LEFT;
-    default:
-      return esc;
+    if (sequence[0] == '[') {
+      if (sequence[1] >= '0' && sequence[1] <= '9') {
+        if ((read_return = read(STDIN_FILENO, &sequence[2], 1)) != 1)
+          return esc;
+        if (sequence[2] == '~') {
+          switch (sequence[1]) {
+          case '1':
+            return HOME_KEY;
+          case '3':
+            return DEL_KEY;
+          case '4':
+            return END_KEY;
+          case '5':
+            return PAGE_UP;
+          case '6':
+            return PAGE_DOWN;
+          }
+        }
+      } else {
+        switch (sequence[1]) {
+        case 'A':
+          return ARROW_UP;
+        case 'B':
+          return ARROW_DOWN;
+        case 'C':
+          return ARROW_RIGHT;
+        case 'D':
+          return ARROW_LEFT;
+        case 'H':
+          return HOME_KEY;
+        case 'F':
+          return END_KEY;
+        default:
+          return esc;
+        }
+      }
+    } else if (sequence[0] == '0') {
+      switch (sequence[1]) {
+      case 'H':
+        return HOME_KEY;
+      case 'F':
+        return END_KEY;
+      }
     }
 
+    return esc;
   } else {
     return c;
   }
@@ -240,6 +274,18 @@ void process_keypress() {
   case ARROW_RIGHT:
   case ARROW_LEFT:
     move_cursor(key_pressed);
+    break;
+  case PAGE_UP:
+  case PAGE_DOWN: {
+    int times = EDITOR.screen_rows;
+    while (times--)
+      move_cursor(key_pressed == PAGE_UP ? ARROW_UP : ARROW_DOWN);
+  } break;
+  case HOME_KEY:
+    EDITOR.cursor_x = 0;
+    break;
+  case END_KEY:
+    EDITOR.cursor_x = EDITOR.screen_cols - 1;
     break;
   }
 }
