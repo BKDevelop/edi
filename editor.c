@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -26,9 +27,17 @@ enum editor_keys {
 };
 /* global data */
 
+typedef struct editor_row {
+  int size;
+  char *chars;
+} editor_row;
+
 struct editor_config {
   int cursor_x, cursor_y;
   int screen_rows, screen_cols;
+
+  int number_of_rows;
+  editor_row row;
 
   struct termios original_terminal_state;
 };
@@ -140,6 +149,34 @@ int get_window_size(int *rows, int *cols) {
   }
 }
 
+/* file i/o */
+
+void open_file(char *filename) {
+  FILE *file = fopen(filename, "r");
+  if (!file)
+    die("open_file");
+
+  char *line = NULL;
+  size_t line_cap = 0;
+  ssize_t line_length;
+
+  line_length = getline(&line, &line_cap, file);
+
+  if (line_length != -1) {
+    while (line_length > 0 &&
+           (line[line_length - 1] == '\r' || line[line_length - 1] == '\n'))
+      line_length--;
+
+    EDITOR.row.size = line_length + 1;
+    EDITOR.row.chars = malloc(line_length + 1);
+    memcpy(EDITOR.row.chars, line, line_length);
+    EDITOR.row.chars[line_length] = '\0';
+    EDITOR.number_of_rows = 1;
+  }
+
+  free(line);
+  fclose(file);
+}
 /*  append buffer */
 
 struct append_buffer {
@@ -320,10 +357,17 @@ void draw_welcome_message(struct append_buffer *ab) {
 
 void draw_rows(struct append_buffer *ab) {
   for (int y = 0; y < EDITOR.screen_rows; y++) {
-    if (y == EDITOR.screen_rows / 3) {
-      draw_welcome_message(ab);
+    if (y >= EDITOR.number_of_rows) {
+      if (EDITOR.number_of_rows == 0 && y == EDITOR.screen_rows / 3) {
+        draw_welcome_message(ab);
+      } else {
+        append_buffer_append(ab, "~", 1); // add ~ to left hand side
+      }
     } else {
-      append_buffer_append(ab, "~", 1); // add ~ to left hand side
+      int len = EDITOR.row.size;
+      if (len > EDITOR.screen_cols)
+        len = EDITOR.screen_cols;
+      append_buffer_append(ab, EDITOR.row.chars, len);
     }
 
     append_buffer_append(ab, "\x1b[K", 3); // clear line
@@ -347,14 +391,18 @@ void refresh_screen() {
 void init_editor() {
   EDITOR.cursor_x = 0;
   EDITOR.cursor_y = 0;
+  EDITOR.number_of_rows = 0;
 
   if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
     die("get_window_size");
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   enable_raw_mode();
   init_editor();
+  if (argc >= 2) {
+    open_file(argv[1]);
+  }
 
   while (true) {
     refresh_screen();
