@@ -37,7 +37,7 @@ struct editor_config {
   int screen_rows, screen_cols;
 
   int number_of_rows;
-  editor_row row;
+  editor_row *row;
 
   struct termios original_terminal_state;
 };
@@ -149,6 +149,18 @@ int get_window_size(int *rows, int *cols) {
   }
 }
 
+/* row operations */
+void append_editor_row(char *line, ssize_t line_length) {
+  EDITOR.row =
+      realloc(EDITOR.row, sizeof(editor_row) * (EDITOR.number_of_rows + 1));
+
+  int at = EDITOR.number_of_rows;
+  EDITOR.row[at].size = line_length + 1;
+  EDITOR.row[at].chars = malloc(line_length + 1);
+  memcpy(EDITOR.row[at].chars, line, line_length);
+  EDITOR.row[at].chars[line_length] = '\0';
+  EDITOR.number_of_rows++;
+}
 /* file i/o */
 
 void open_file(char *filename) {
@@ -160,18 +172,11 @@ void open_file(char *filename) {
   size_t line_cap = 0;
   ssize_t line_length;
 
-  line_length = getline(&line, &line_cap, file);
-
-  if (line_length != -1) {
+  while ((line_length = getline(&line, &line_cap, file)) != -1) {
     while (line_length > 0 &&
            (line[line_length - 1] == '\r' || line[line_length - 1] == '\n'))
       line_length--;
-
-    EDITOR.row.size = line_length + 1;
-    EDITOR.row.chars = malloc(line_length + 1);
-    memcpy(EDITOR.row.chars, line, line_length);
-    EDITOR.row.chars[line_length] = '\0';
-    EDITOR.number_of_rows = 1;
+    append_editor_row(line, line_length);
   }
 
   free(line);
@@ -364,10 +369,10 @@ void draw_rows(struct append_buffer *ab) {
         append_buffer_append(ab, "~", 1); // add ~ to left hand side
       }
     } else {
-      int len = EDITOR.row.size;
+      int len = EDITOR.row[y].size;
       if (len > EDITOR.screen_cols)
         len = EDITOR.screen_cols;
-      append_buffer_append(ab, EDITOR.row.chars, len);
+      append_buffer_append(ab, EDITOR.row[y].chars, len);
     }
 
     append_buffer_append(ab, "\x1b[K", 3); // clear line
@@ -392,6 +397,7 @@ void init_editor() {
   EDITOR.cursor_x = 0;
   EDITOR.cursor_y = 0;
   EDITOR.number_of_rows = 0;
+  EDITOR.row = NULL;
 
   if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
     die("get_window_size");
