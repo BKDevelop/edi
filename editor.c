@@ -395,7 +395,7 @@ void draw_rows(struct append_buffer *ab) {
                            len);
     }
 
-    append_buffer_append(ab, "\x1b[K", 3); // clear line
+    append_buffer_append(ab, "\x1b[K", 3); // clear line on the right of cursor
     if (y < EDITOR.screen_rows - 1) {
       append_buffer_append(ab, "\r\n", 2);
     }
@@ -406,6 +406,7 @@ void refresh_screen() {
   scroll();
 
   struct append_buffer ab = ABUF_INIT;
+  reposition_cursor(&ab);
   hide_cursor(&ab);
   draw_rows(&ab);
   reposition_cursor_at(&ab, (EDITOR.cursor_x - EDITOR.col_offset) + 1,
