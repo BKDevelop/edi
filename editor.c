@@ -35,6 +35,8 @@ typedef struct editor_row {
 struct editor_config {
   int cursor_x, cursor_y;
   int screen_rows, screen_cols;
+  int row_offset;
+  int col_offset;
 
   int number_of_rows;
   editor_row *row;
@@ -215,7 +217,7 @@ void move_cursor(int key_pressed) {
     break;
 
   case ARROW_DOWN:
-    if (EDITOR.cursor_y < EDITOR.screen_rows - 1)
+    if (EDITOR.cursor_y < EDITOR.number_of_rows)
       EDITOR.cursor_y++;
     break;
 
@@ -225,8 +227,7 @@ void move_cursor(int key_pressed) {
     break;
 
   case ARROW_RIGHT:
-    if (EDITOR.cursor_x < EDITOR.screen_cols - 1)
-      EDITOR.cursor_x++;
+    EDITOR.cursor_x++;
     break;
 
   default:
@@ -242,7 +243,7 @@ int read_keypress() {
       die("read");
   }
 
-  // hanlde escape sequences
+  // handle escape sequences
   char esc = '\x1b';
 
   if (c == esc) {
@@ -334,6 +335,21 @@ void process_keypress() {
 
 /* output */
 
+void scroll() {
+  if (EDITOR.cursor_y < EDITOR.row_offset) {
+    EDITOR.row_offset = EDITOR.cursor_y;
+  }
+  if (EDITOR.cursor_y >= EDITOR.row_offset + EDITOR.screen_rows) {
+    EDITOR.row_offset = EDITOR.cursor_y - EDITOR.screen_rows + 1;
+  }
+  if (EDITOR.cursor_x < EDITOR.col_offset) {
+    EDITOR.col_offset = EDITOR.cursor_x;
+  }
+  if (EDITOR.cursor_x >= EDITOR.col_offset + EDITOR.screen_cols) {
+    EDITOR.col_offset = EDITOR.cursor_x - EDITOR.screen_cols + 1;
+  }
+}
+
 void write_buffer(struct append_buffer *ab) {
   write(STDOUT_FILENO, ab->b, ab->len);
   append_buffer_free(ab);
@@ -362,17 +378,21 @@ void draw_welcome_message(struct append_buffer *ab) {
 
 void draw_rows(struct append_buffer *ab) {
   for (int y = 0; y < EDITOR.screen_rows; y++) {
-    if (y >= EDITOR.number_of_rows) {
+    int file_row = y + EDITOR.row_offset;
+    if (file_row >= EDITOR.number_of_rows) {
       if (EDITOR.number_of_rows == 0 && y == EDITOR.screen_rows / 3) {
         draw_welcome_message(ab);
       } else {
         append_buffer_append(ab, "~", 1); // add ~ to left hand side
       }
     } else {
-      int len = EDITOR.row[y].size;
+      int len = EDITOR.row[file_row].size - EDITOR.col_offset;
+      if (len < 0)
+        len = 0;
       if (len > EDITOR.screen_cols)
         len = EDITOR.screen_cols;
-      append_buffer_append(ab, EDITOR.row[y].chars, len);
+      append_buffer_append(ab, &EDITOR.row[file_row].chars[EDITOR.col_offset],
+                           len);
     }
 
     append_buffer_append(ab, "\x1b[K", 3); // clear line
@@ -383,10 +403,13 @@ void draw_rows(struct append_buffer *ab) {
 }
 
 void refresh_screen() {
+  scroll();
+
   struct append_buffer ab = ABUF_INIT;
   hide_cursor(&ab);
   draw_rows(&ab);
-  reposition_cursor_at(&ab, EDITOR.cursor_x, EDITOR.cursor_y);
+  reposition_cursor_at(&ab, (EDITOR.cursor_x - EDITOR.col_offset) + 1,
+                       (EDITOR.cursor_y - EDITOR.row_offset) + 1);
   show_cursor(&ab);
   write_buffer(&ab);
 }
@@ -396,6 +419,8 @@ void refresh_screen() {
 void init_editor() {
   EDITOR.cursor_x = 0;
   EDITOR.cursor_y = 0;
+  EDITOR.row_offset = 0;
+  EDITOR.col_offset = 0;
   EDITOR.number_of_rows = 0;
   EDITOR.row = NULL;
 
