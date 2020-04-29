@@ -215,8 +215,12 @@ void move_cursor(int key_pressed) {
                         : &EDITOR.row[EDITOR.cursor_y];
   switch (key_pressed) {
   case ARROW_LEFT:
-    if (EDITOR.cursor_x > 0)
+    if (EDITOR.cursor_x > 0) {
       EDITOR.cursor_x--;
+    } else if (EDITOR.cursor_y > 0) {
+      EDITOR.cursor_y--;
+      EDITOR.cursor_x = EDITOR.row[EDITOR.cursor_y].size;
+    }
     break;
 
   case ARROW_DOWN:
@@ -232,6 +236,9 @@ void move_cursor(int key_pressed) {
   case ARROW_RIGHT:
     if (row && (EDITOR.cursor_x < (row->size))) {
       EDITOR.cursor_x++;
+    } else if (EDITOR.cursor_y < EDITOR.number_of_rows) {
+      EDITOR.cursor_y++;
+      EDITOR.cursor_x = 0;
     }
     break;
 
