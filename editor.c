@@ -157,7 +157,7 @@ void append_editor_row(char *line, ssize_t line_length) {
       realloc(EDITOR.row, sizeof(editor_row) * (EDITOR.number_of_rows + 1));
 
   int at = EDITOR.number_of_rows;
-  EDITOR.row[at].size = line_length + 1;
+  EDITOR.row[at].size = line_length;
   EDITOR.row[at].chars = malloc(line_length + 1);
   memcpy(EDITOR.row[at].chars, line, line_length);
   EDITOR.row[at].chars[line_length] = '\0';
@@ -210,6 +210,9 @@ void append_buffer_free(struct append_buffer *ab) { free(ab->b); }
 /* input */
 
 void move_cursor(int key_pressed) {
+  editor_row *row = (EDITOR.cursor_y >= EDITOR.number_of_rows)
+                        ? NULL
+                        : &EDITOR.row[EDITOR.cursor_y];
   switch (key_pressed) {
   case ARROW_LEFT:
     if (EDITOR.cursor_x > 0)
@@ -227,12 +230,22 @@ void move_cursor(int key_pressed) {
     break;
 
   case ARROW_RIGHT:
-    EDITOR.cursor_x++;
+    if (row && (EDITOR.cursor_x < (row->size))) {
+      EDITOR.cursor_x++;
+    }
     break;
 
   default:
     break;
   }
+
+  // snap cursor end of line if moved to shorter line
+  row = (EDITOR.cursor_y >= EDITOR.number_of_rows)
+            ? NULL
+            : &EDITOR.row[EDITOR.cursor_y];
+  int row_length = row ? row->size : 0;
+  if (EDITOR.cursor_x > row_length)
+    EDITOR.cursor_x = row_length;
 }
 
 int read_keypress() {
