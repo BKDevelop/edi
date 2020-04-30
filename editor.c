@@ -478,10 +478,20 @@ void draw_rows(struct append_buffer *ab) {
     }
 
     append_buffer_append(ab, "\x1b[K", 3); // clear line on the right of cursor
-    if (y < EDITOR.screen_rows - 1) {
-      append_buffer_append(ab, "\r\n", 2);
-    }
+    append_buffer_append(ab, "\r\n", 2);
   }
+}
+
+void draw_status_bar(struct append_buffer *ab) {
+  append_buffer_append(ab, "\x1b[7m", 4); // invert colors
+  int len = 0;
+
+  while (len < EDITOR.screen_cols) {
+    append_buffer_append(ab, " ", 1);
+    len++;
+  }
+
+  append_buffer_append(ab, "\x1b[m", 3); // normal colors
 }
 
 void refresh_screen() {
@@ -491,6 +501,7 @@ void refresh_screen() {
   reposition_cursor(&ab);
   hide_cursor(&ab);
   draw_rows(&ab);
+  draw_status_bar(&ab);
   reposition_cursor_at(&ab, (EDITOR.render_cursor_x - EDITOR.col_offset) + 1,
                        (EDITOR.cursor_y - EDITOR.row_offset) + 1);
   show_cursor(&ab);
@@ -510,6 +521,7 @@ void init_editor() {
 
   if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
     die("get_window_size");
+  EDITOR.screen_rows -= 1;
 }
 
 int main(int argc, char *argv[]) {
