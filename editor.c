@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 /* defines */
@@ -42,6 +44,8 @@ struct editor_config {
   int row_offset;
   int col_offset;
 
+  char status_message[80];
+  time_t status_message_time;
   char *filename;
   int number_of_rows;
   editor_row *row;
@@ -511,6 +515,16 @@ void draw_status_bar(struct append_buffer *ab) {
   }
 
   append_buffer_append(ab, "\x1b[m", 3); // normal colors
+  append_buffer_append(ab, "\r\n", 2);
+}
+
+void draw_message_bar(struct append_buffer *ab) {
+  append_buffer_append(ab, "\x1b[K", 3);
+  int status_length = strlen(EDITOR.status_message);
+  if (status_length > EDITOR.screen_cols)
+    status_length = EDITOR.screen_cols;
+  if (status_length && time(NULL) - EDITOR.status_message_time < 5)
+    append_buffer_append(ab, EDITOR.status_message, status_length);
 }
 
 void refresh_screen() {
@@ -521,10 +535,19 @@ void refresh_screen() {
   hide_cursor(&ab);
   draw_rows(&ab);
   draw_status_bar(&ab);
+  draw_message_bar(&ab);
   reposition_cursor_at(&ab, (EDITOR.render_cursor_x - EDITOR.col_offset) + 1,
                        (EDITOR.cursor_y - EDITOR.row_offset) + 1);
   show_cursor(&ab);
   write_buffer(&ab);
+}
+
+void set_status_message(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(EDITOR.status_message, sizeof(EDITOR.status_message), fmt, ap);
+  va_end(ap);
+  EDITOR.status_message_time = time(NULL); // set current time
 }
 
 /* init */
@@ -538,10 +561,12 @@ void init_editor() {
   EDITOR.number_of_rows = 0;
   EDITOR.row = NULL;
   EDITOR.filename = NULL;
+  EDITOR.status_message[0] = '\0';
+  EDITOR.status_message_time = 0;
 
   if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
     die("get_window_size");
-  EDITOR.screen_rows -= 1;
+  EDITOR.screen_rows -= 2;
 }
 
 int main(int argc, char *argv[]) {
@@ -551,6 +576,7 @@ int main(int argc, char *argv[]) {
     open_file(argv[1]);
   }
 
+  set_status_message("HELP: Ctrl-Q = quit");
   while (true) {
     refresh_screen();
     process_keypress();
