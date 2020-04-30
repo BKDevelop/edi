@@ -156,10 +156,10 @@ int get_window_size(int *rows, int *cols) {
 }
 
 /* row operations */
-int cursor_x_to_render_x(editor_row* row, int cursor_x){
+int cursor_x_to_render_x(editor_row *row, int cursor_x) {
   int render_cursor_x = 0;
-  for(int i = 0; i < cursor_x; i++){
-    if(row -> chars[i] == '\t') {
+  for (int i = 0; i < cursor_x; i++) {
+    if (row->chars[i] == '\t') {
       render_cursor_x += (EDI_TAB_STOP - 1) - (render_cursor_x % EDI_TAB_STOP);
     }
     render_cursor_x++;
@@ -176,7 +176,7 @@ void update_render_row(editor_row *row) {
 
   free(row->render);
   /* row->render = malloc(row->size + 1 + (tabs * (EDI_TAB_STOP - 1))); */
-  row->render = malloc((row -> size) + (tabs * (EDI_TAB_STOP -1)) + 1);
+  row->render = malloc((row->size) + (tabs * (EDI_TAB_STOP - 1)) + 1);
   int idx = 0;
 
   for (int j = 0; j < row->size; j++) {
@@ -376,6 +376,7 @@ void process_keypress() {
   case CTRL_KEY('q'):
     clear_screen_for_quit();
     exit(EXIT_SUCCESS);
+
   // movement keys
   case ARROW_UP:
   case ARROW_DOWN:
@@ -383,8 +384,17 @@ void process_keypress() {
   case ARROW_LEFT:
     move_cursor(key_pressed);
     break;
+
   case PAGE_UP:
   case PAGE_DOWN: {
+    if (key_pressed == PAGE_UP) {
+      EDITOR.cursor_y = EDITOR.row_offset;
+    } else {
+      EDITOR.cursor_y = EDITOR.row_offset + EDITOR.screen_rows - 1;
+      if (EDITOR.cursor_y > EDITOR.number_of_rows)
+        EDITOR.cursor_y = EDITOR.number_of_rows;
+    }
+
     int times = EDITOR.screen_rows;
     while (times--)
       move_cursor(key_pressed == PAGE_UP ? ARROW_UP : ARROW_DOWN);
@@ -393,7 +403,9 @@ void process_keypress() {
     EDITOR.cursor_x = 0;
     break;
   case END_KEY:
-    EDITOR.cursor_x = EDITOR.screen_cols - 1;
+    if (EDITOR.cursor_y < EDITOR.number_of_rows) {
+      EDITOR.cursor_x = EDITOR.row[EDITOR.cursor_y].render_size;
+    }
     break;
   }
 }
@@ -403,7 +415,8 @@ void process_keypress() {
 void scroll() {
   EDITOR.render_cursor_x = 0;
   if (EDITOR.cursor_y < EDITOR.number_of_rows) {
-    EDITOR.render_cursor_x = cursor_x_to_render_x(&EDITOR.row[EDITOR.cursor_y], EDITOR.cursor_x);
+    EDITOR.render_cursor_x =
+        cursor_x_to_render_x(&EDITOR.row[EDITOR.cursor_y], EDITOR.cursor_x);
   }
   if (EDITOR.cursor_y < EDITOR.row_offset) {
     EDITOR.row_offset = EDITOR.cursor_y;
