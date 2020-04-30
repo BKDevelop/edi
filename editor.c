@@ -42,6 +42,7 @@ struct editor_config {
   int row_offset;
   int col_offset;
 
+  char *filename;
   int number_of_rows;
   editor_row *row;
 
@@ -211,6 +212,9 @@ void append_editor_row(char *line, ssize_t line_length) {
 /* file i/o */
 
 void open_file(char *filename) {
+  free(EDITOR.filename);
+  EDITOR.filename = strdup(filename);
+
   FILE *file = fopen(filename, "r");
   if (!file)
     die("open_file");
@@ -484,11 +488,26 @@ void draw_rows(struct append_buffer *ab) {
 
 void draw_status_bar(struct append_buffer *ab) {
   append_buffer_append(ab, "\x1b[7m", 4); // invert colors
-  int len = 0;
+  char left_status[80], right_status[80];
 
-  while (len < EDITOR.screen_cols) {
-    append_buffer_append(ab, " ", 1);
-    len++;
+  int left_len = snprintf(left_status, sizeof(left_status), "%.20s - %d lines",
+                          EDITOR.filename ? EDITOR.filename : "[No Name]",
+                          EDITOR.number_of_rows);
+  int right_len = snprintf(right_status, sizeof(right_status), "%d/%d",
+                           EDITOR.cursor_y + 1, EDITOR.number_of_rows);
+
+  if (left_len > EDITOR.screen_cols)
+    left_len = EDITOR.screen_cols;
+  append_buffer_append(ab, left_status, left_len);
+
+  while (left_len < EDITOR.screen_cols) {
+    if (EDITOR.screen_cols - left_len == right_len) {
+      append_buffer_append(ab, right_status, right_len);
+      break;
+    } else {
+      append_buffer_append(ab, " ", 1);
+      left_len++;
+    }
   }
 
   append_buffer_append(ab, "\x1b[m", 3); // normal colors
@@ -518,6 +537,7 @@ void init_editor() {
   EDITOR.col_offset = 0;
   EDITOR.number_of_rows = 0;
   EDITOR.row = NULL;
+  EDITOR.filename = NULL;
 
   if (get_window_size(&EDITOR.screen_rows, &EDITOR.screen_cols) == -1)
     die("get_window_size");
