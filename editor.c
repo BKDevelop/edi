@@ -12,6 +12,7 @@
 /* defines */
 
 #define EDI_VERSION "0.0.1"
+#define EDI_TAB_STOP 8
 #define CTRL_KEY(k) ((k)&0x1f)
 
 enum editor_keys {
@@ -29,11 +30,14 @@ enum editor_keys {
 
 typedef struct editor_row {
   int size;
+  int render_size;
   char *chars;
+  char *render;
 } editor_row;
 
 struct editor_config {
   int cursor_x, cursor_y;
+  int render_cursor_x;
   int screen_rows, screen_cols;
   int row_offset;
   int col_offset;
@@ -152,6 +156,43 @@ int get_window_size(int *rows, int *cols) {
 }
 
 /* row operations */
+int cursor_x_to_render_x(editor_row* row, int cursor_x){
+  int render_cursor_x = 0;
+  for(int i = 0; i < cursor_x; i++){
+    if(row -> chars[i] == '\t') {
+      render_cursor_x += (EDI_TAB_STOP - 1) - (render_cursor_x % EDI_TAB_STOP);
+    }
+    render_cursor_x++;
+  }
+  return render_cursor_x;
+}
+
+void update_render_row(editor_row *row) {
+  int tabs = 0;
+  for (int j = 0; j < row->size; j++) {
+    if (row->chars[j] == '\t')
+      tabs++;
+  }
+
+  free(row->render);
+  /* row->render = malloc(row->size + 1 + (tabs * (EDI_TAB_STOP - 1))); */
+  row->render = malloc((row -> size) + (tabs * (EDI_TAB_STOP -1)) + 1);
+  int idx = 0;
+
+  for (int j = 0; j < row->size; j++) {
+    if (row->chars[j] == '\t') {
+      row->render[idx++] = ' ';
+      while (idx % EDI_TAB_STOP != 0)
+        row->render[idx++] = ' ';
+    } else {
+      row->render[idx++] = row->chars[j];
+    }
+  }
+
+  row->render[idx] = '\0';
+  row->render_size = idx;
+}
+
 void append_editor_row(char *line, ssize_t line_length) {
   EDITOR.row =
       realloc(EDITOR.row, sizeof(editor_row) * (EDITOR.number_of_rows + 1));
@@ -162,6 +203,10 @@ void append_editor_row(char *line, ssize_t line_length) {
   memcpy(EDITOR.row[at].chars, line, line_length);
   EDITOR.row[at].chars[line_length] = '\0';
   EDITOR.number_of_rows++;
+
+  EDITOR.row[at].render_size = 0;
+  EDITOR.row[at].render = NULL;
+  update_render_row(&EDITOR.row[at]);
 }
 /* file i/o */
 
@@ -356,17 +401,21 @@ void process_keypress() {
 /* output */
 
 void scroll() {
+  EDITOR.render_cursor_x = 0;
+  if (EDITOR.cursor_y < EDITOR.number_of_rows) {
+    EDITOR.render_cursor_x = cursor_x_to_render_x(&EDITOR.row[EDITOR.cursor_y], EDITOR.cursor_x);
+  }
   if (EDITOR.cursor_y < EDITOR.row_offset) {
     EDITOR.row_offset = EDITOR.cursor_y;
   }
   if (EDITOR.cursor_y >= EDITOR.row_offset + EDITOR.screen_rows) {
     EDITOR.row_offset = EDITOR.cursor_y - EDITOR.screen_rows + 1;
   }
-  if (EDITOR.cursor_x < EDITOR.col_offset) {
-    EDITOR.col_offset = EDITOR.cursor_x;
+  if (EDITOR.render_cursor_x < EDITOR.col_offset) {
+    EDITOR.col_offset = EDITOR.render_cursor_x;
   }
-  if (EDITOR.cursor_x >= EDITOR.col_offset + EDITOR.screen_cols) {
-    EDITOR.col_offset = EDITOR.cursor_x - EDITOR.screen_cols + 1;
+  if (EDITOR.render_cursor_x >= EDITOR.col_offset + EDITOR.screen_cols) {
+    EDITOR.col_offset = EDITOR.render_cursor_x - EDITOR.screen_cols + 1;
   }
 }
 
@@ -406,12 +455,12 @@ void draw_rows(struct append_buffer *ab) {
         append_buffer_append(ab, "~", 1); // add ~ to left hand side
       }
     } else {
-      int len = EDITOR.row[file_row].size - EDITOR.col_offset;
+      int len = EDITOR.row[file_row].render_size - EDITOR.col_offset;
       if (len < 0)
         len = 0;
       if (len > EDITOR.screen_cols)
         len = EDITOR.screen_cols;
-      append_buffer_append(ab, &EDITOR.row[file_row].chars[EDITOR.col_offset],
+      append_buffer_append(ab, &EDITOR.row[file_row].render[EDITOR.col_offset],
                            len);
     }
 
@@ -429,7 +478,7 @@ void refresh_screen() {
   reposition_cursor(&ab);
   hide_cursor(&ab);
   draw_rows(&ab);
-  reposition_cursor_at(&ab, (EDITOR.cursor_x - EDITOR.col_offset) + 1,
+  reposition_cursor_at(&ab, (EDITOR.render_cursor_x - EDITOR.col_offset) + 1,
                        (EDITOR.cursor_y - EDITOR.row_offset) + 1);
   show_cursor(&ab);
   write_buffer(&ab);
@@ -440,6 +489,7 @@ void refresh_screen() {
 void init_editor() {
   EDITOR.cursor_x = 0;
   EDITOR.cursor_y = 0;
+  EDITOR.render_cursor_x = 0;
   EDITOR.row_offset = 0;
   EDITOR.col_offset = 0;
   EDITOR.number_of_rows = 0;
