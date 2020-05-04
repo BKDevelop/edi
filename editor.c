@@ -213,6 +213,26 @@ void append_editor_row(char *line, ssize_t line_length) {
   EDITOR.row[at].render = NULL;
   update_render_row(&EDITOR.row[at]);
 }
+
+void insert_char_in_row(editor_row *row, int at, int c) {
+  if (at < 0 || at > row->size)
+    at = row->size;
+  row->chars = realloc(row->chars, row->size + 2);
+  memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+  row->size++;
+  row->chars[at] = c;
+  update_render_row(row);
+}
+
+/* editor operations */
+void insert_char(int c) {
+  if (EDITOR.cursor_y == EDITOR.number_of_rows) {
+    append_editor_row(" ", 0);
+  }
+  insert_char_in_row(&EDITOR.row[EDITOR.cursor_y], EDITOR.cursor_x, c);
+  EDITOR.cursor_x++;
+}
+
 /* file i/o */
 
 void open_file(char *filename) {
@@ -415,6 +435,9 @@ void process_keypress() {
       EDITOR.cursor_x = EDITOR.row[EDITOR.cursor_y].render_size;
     }
     break;
+
+  default:
+    insert_char(key_pressed);
   }
 }
 
