@@ -18,6 +18,7 @@
 #define CTRL_KEY(k) ((k)&0x1f)
 
 enum editor_keys {
+  BACKSPACE = 127,
   ARROW_UP = 1000, // integer enum in c does auto increment
   ARROW_DOWN,
   ARROW_RIGHT,
@@ -401,6 +402,10 @@ void process_keypress() {
   int key_pressed = read_keypress();
 
   switch (key_pressed) {
+  case '\r':
+    // TODO
+    break;
+
   case CTRL_KEY('q'):
     clear_screen_for_quit();
     exit(EXIT_SUCCESS);
@@ -434,6 +439,16 @@ void process_keypress() {
     if (EDITOR.cursor_y < EDITOR.number_of_rows) {
       EDITOR.cursor_x = EDITOR.row[EDITOR.cursor_y].render_size;
     }
+    break;
+
+  case BACKSPACE:
+  case CTRL_KEY('h'):
+  case DEL_KEY:
+    // TODO
+    break;
+
+  case CTRL_KEY('l'):
+  case '\x1b':
     break;
 
   default:
