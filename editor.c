@@ -62,6 +62,7 @@ struct append_buffer;
 
 int read_keypress();
 void append_buffer_append();
+void set_status_message(const char *fmt, ...);
 
 /* terminal configuration */
 
@@ -293,6 +294,7 @@ void save_file() {
       if (write(fd, write_buffer, length) == length) {
         close(fd);
         free(write_buffer);
+        set_status_message("%d bytes written to disk", length);
         return;
       }
     }
@@ -300,6 +302,7 @@ void save_file() {
   }
 
   free(write_buffer);
+  set_status_message("Error while saving: %s", strerror(errno));
 }
 /*  append buffer */
 
@@ -661,7 +664,7 @@ int main(int argc, char *argv[]) {
     open_file(argv[1]);
   }
 
-  set_status_message("HELP: Ctrl-Q = quit");
+  set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit");
   while (true) {
     refresh_screen();
     process_keypress();
