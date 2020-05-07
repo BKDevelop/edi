@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -236,6 +237,26 @@ void insert_char(int c) {
 
 /* file i/o */
 
+char *editor_row_to_string(int *buffer_length) {
+  int total_length = 0;
+
+  for (int j = 0; j < EDITOR.number_of_rows; j++)
+    total_length += EDITOR.row[j].size + 1;
+
+  *buffer_length = total_length;
+
+  char *buffer = malloc(total_length);
+  char *p = buffer;
+  for (int j = 0; j < EDITOR.number_of_rows; j++) {
+    memcpy(p, EDITOR.row[j].chars, EDITOR.row[j].size);
+    p += EDITOR.row[j].size;
+    *p = '\n';
+    p++;
+  }
+
+  return buffer;
+}
+
 void open_file(char *filename) {
   free(EDITOR.filename);
   EDITOR.filename = strdup(filename);
@@ -257,6 +278,20 @@ void open_file(char *filename) {
 
   free(line);
   fclose(file);
+}
+
+void save_file() {
+  if (EDITOR.filename == NULL)
+    return;
+
+  int length;
+  char *write_buffer = editor_row_to_string(&length);
+
+  int fd = open(EDITOR.filename, O_RDWR | O_CREAT, 0644);
+  ftruncate(fd, length);
+  write(fd, write_buffer, length);
+  close(fd);
+  free(write_buffer);
 }
 /*  append buffer */
 
@@ -449,6 +484,10 @@ void process_keypress() {
 
   case CTRL_KEY('l'):
   case '\x1b':
+    break;
+
+  case CTRL_KEY('s'):
+    save_file();
     break;
 
   default:
