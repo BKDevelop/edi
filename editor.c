@@ -49,6 +49,7 @@ struct editor_config {
   char status_message[80];
   time_t status_message_time;
   char *filename;
+  bool file_modified;
   int number_of_rows;
   editor_row *row;
 
@@ -215,6 +216,8 @@ void append_editor_row(char *line, ssize_t line_length) {
   EDITOR.row[at].render_size = 0;
   EDITOR.row[at].render = NULL;
   update_render_row(&EDITOR.row[at]);
+
+  EDITOR.file_modified = true;
 }
 
 void insert_char_in_row(editor_row *row, int at, int c) {
@@ -225,6 +228,8 @@ void insert_char_in_row(editor_row *row, int at, int c) {
   row->size++;
   row->chars[at] = c;
   update_render_row(row);
+
+  EDITOR.file_modified = true;
 }
 
 /* editor operations */
@@ -279,6 +284,8 @@ void open_file(char *filename) {
 
   free(line);
   fclose(file);
+
+  EDITOR.file_modified = false;
 }
 
 void save_file() {
@@ -294,6 +301,7 @@ void save_file() {
       if (write(fd, write_buffer, length) == length) {
         close(fd);
         free(write_buffer);
+        EDITOR.file_modified = false;
         set_status_message("%d bytes written to disk", length);
         return;
       }
@@ -582,9 +590,10 @@ void draw_status_bar(struct append_buffer *ab) {
   append_buffer_append(ab, "\x1b[7m", 4); // invert colors
   char left_status[80], right_status[80];
 
-  int left_len = snprintf(left_status, sizeof(left_status), "%.20s - %d lines",
-                          EDITOR.filename ? EDITOR.filename : "[No Name]",
-                          EDITOR.number_of_rows);
+  int left_len =
+      snprintf(left_status, sizeof(left_status), "%.20s - %d lines %s",
+               EDITOR.filename ? EDITOR.filename : "[No Name]",
+               EDITOR.number_of_rows, EDITOR.file_modified ? "(modified)" : "");
   int right_len = snprintf(right_status, sizeof(right_status), "%d/%d",
                            EDITOR.cursor_y + 1, EDITOR.number_of_rows);
 
@@ -649,6 +658,7 @@ void init_editor() {
   EDITOR.number_of_rows = 0;
   EDITOR.row = NULL;
   EDITOR.filename = NULL;
+  EDITOR.file_modified = false;
   EDITOR.status_message[0] = '\0';
   EDITOR.status_message_time = 0;
 
