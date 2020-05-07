@@ -288,9 +288,17 @@ void save_file() {
   char *write_buffer = editor_row_to_string(&length);
 
   int fd = open(EDITOR.filename, O_RDWR | O_CREAT, 0644);
-  ftruncate(fd, length);
-  write(fd, write_buffer, length);
-  close(fd);
+  if (fd != -1) {
+    if (ftruncate(fd, length) != -1) {
+      if (write(fd, write_buffer, length) == length) {
+        close(fd);
+        free(write_buffer);
+        return;
+      }
+    }
+    close(fd);
+  }
+
   free(write_buffer);
 }
 /*  append buffer */
