@@ -17,6 +17,7 @@
 #define EDI_VERSION "0.0.1"
 #define EDI_TAB_STOP 8
 #define CTRL_KEY(k) ((k)&0x1f)
+#define EDI_QUIT_TIMES 2;
 
 enum editor_keys {
   BACKSPACE = 127,
@@ -453,6 +454,8 @@ int read_keypress() {
 }
 
 void process_keypress() {
+  static int quit_times = EDI_QUIT_TIMES;
+
   int key_pressed = read_keypress();
 
   switch (key_pressed) {
@@ -461,6 +464,13 @@ void process_keypress() {
     break;
 
   case CTRL_KEY('q'):
+    if (EDITOR.file_modified && quit_times > 0) {
+      set_status_message("WARNING: File has unsaved changes. "
+                         "Press Ctrl-Q %d more times to quit.",
+                         quit_times);
+      quit_times--;
+      return;
+    }
     clear_screen_for_quit();
     exit(EXIT_SUCCESS);
 
@@ -512,6 +522,8 @@ void process_keypress() {
   default:
     insert_char(key_pressed);
   }
+
+  quit_times = EDI_QUIT_TIMES;
 }
 
 /* output */
