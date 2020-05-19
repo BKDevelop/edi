@@ -233,12 +233,38 @@ void insert_char_in_row(editor_row *row, int at, int c) {
   EDITOR.file_modified = true;
 }
 
+void append_string_to_row(editor_row *row, char *string, size_t length) {
+  row->chars = realloc(row->chars, row->size + length + 1);
+  memcpy(&row->chars[row->size], string, length);
+  row->size += length;
+  row->chars[row->size] = '\0';
+
+  update_render_row(row);
+  EDITOR.file_modified = true;
+}
+
 void delete_char_in_row(editor_row *row, int at) {
   if (at < 0 || at >= row->size)
     return;
   memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
   row->size--;
   update_render_row(row);
+  EDITOR.file_modified = true;
+}
+
+void free_row(editor_row *row) {
+  free(row->chars);
+  free(row->render);
+}
+
+void delete_row(int at) {
+  if (at < 0 || at >= EDITOR.number_of_rows)
+    return;
+
+  free_row(&EDITOR.row[at]);
+  memmove(&EDITOR.row[at], &EDITOR.row[at + 1],
+          sizeof(editor_row) * (EDITOR.number_of_rows - at - 1));
+  EDITOR.number_of_rows--;
   EDITOR.file_modified = true;
 }
 
@@ -255,10 +281,24 @@ void delete_char() {
   if (EDITOR.cursor_y == EDITOR.number_of_rows)
     return;
 
+  if (EDITOR.cursor_x == 0 && EDITOR.cursor_y == 0)
+    return;
+
+  if (EDITOR.cursor_x > EDITOR.row[EDITOR.cursor_y].size) {
+    EDITOR.cursor_y++;
+    EDITOR.cursor_x = 0;
+  }
+
   editor_row *row = &EDITOR.row[EDITOR.cursor_y];
   if (EDITOR.cursor_x > 0) {
     delete_char_in_row(row, EDITOR.cursor_x - 1);
     EDITOR.cursor_x--;
+  } else {
+    EDITOR.cursor_x = EDITOR.row[EDITOR.cursor_y - 1].size;
+    append_string_to_row(&EDITOR.row[EDITOR.cursor_y - 1], row->chars,
+                         row->size);
+    delete_row(EDITOR.cursor_y);
+    EDITOR.cursor_y--;
   }
 }
 
@@ -530,6 +570,8 @@ void process_keypress() {
   case DEL_KEY:
     if (key_pressed == DEL_KEY)
       move_cursor(ARROW_RIGHT);
+    if (EDITOR.cursor_x == 0)
+      delete_row(EDITOR.cursor_y);
     delete_char();
     break;
 
