@@ -185,7 +185,6 @@ void update_render_row(editor_row *row) {
   }
 
   free(row->render);
-  /* row->render = malloc(row->size + 1 + (tabs * (EDI_TAB_STOP - 1))); */
   row->render = malloc((row->size) + (tabs * (EDI_TAB_STOP - 1)) + 1);
   int idx = 0;
 
@@ -283,11 +282,6 @@ void delete_char() {
 
   if (EDITOR.cursor_x == 0 && EDITOR.cursor_y == 0)
     return;
-
-  if (EDITOR.cursor_x > EDITOR.row[EDITOR.cursor_y].size) {
-    EDITOR.cursor_y++;
-    EDITOR.cursor_x = 0;
-  }
 
   editor_row *row = &EDITOR.row[EDITOR.cursor_y];
   if (EDITOR.cursor_x > 0) {
@@ -570,8 +564,7 @@ void process_keypress() {
   case DEL_KEY:
     if (key_pressed == DEL_KEY)
       move_cursor(ARROW_RIGHT);
-    if (EDITOR.cursor_x == 0)
-      delete_row(EDITOR.cursor_y);
+
     delete_char();
     break;
 
