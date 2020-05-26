@@ -202,20 +202,24 @@ void update_render_row(editor_row *row) {
   row->render_size = idx;
 }
 
-void append_editor_row(char *line, ssize_t line_length) {
+void insert_editor_row_at(int at_y, char *line, ssize_t line_length) {
+  if (at_y < 0 || at_y > EDITOR.number_of_rows)
+    return;
+
   EDITOR.row =
       realloc(EDITOR.row, sizeof(editor_row) * (EDITOR.number_of_rows + 1));
+  memmove(&EDITOR.row[at_y + 1], &EDITOR.row[at_y],
+          sizeof(editor_row) * (EDITOR.number_of_rows - at_y));
 
-  int at = EDITOR.number_of_rows;
-  EDITOR.row[at].size = line_length;
-  EDITOR.row[at].chars = malloc(line_length + 1);
-  memcpy(EDITOR.row[at].chars, line, line_length);
-  EDITOR.row[at].chars[line_length] = '\0';
+  EDITOR.row[at_y].size = line_length;
+  EDITOR.row[at_y].chars = malloc(line_length + 1);
+  memcpy(EDITOR.row[at_y].chars, line, line_length);
+  EDITOR.row[at_y].chars[line_length] = '\0';
   EDITOR.number_of_rows++;
 
-  EDITOR.row[at].render_size = 0;
-  EDITOR.row[at].render = NULL;
-  update_render_row(&EDITOR.row[at]);
+  EDITOR.row[at_y].render_size = 0;
+  EDITOR.row[at_y].render = NULL;
+  update_render_row(&EDITOR.row[at_y]);
 
   EDITOR.file_modified = true;
 }
@@ -270,10 +274,28 @@ void delete_row(int at) {
 /* editor operations */
 void insert_char(int c) {
   if (EDITOR.cursor_y == EDITOR.number_of_rows) {
-    append_editor_row(" ", 0);
+    insert_editor_row_at(EDITOR.number_of_rows, "", 0);
   }
   insert_char_in_row(&EDITOR.row[EDITOR.cursor_y], EDITOR.cursor_x, c);
   EDITOR.cursor_x++;
+}
+
+void insert_new_line() {
+  if (EDITOR.cursor_x == 0) {
+    insert_editor_row_at(EDITOR.cursor_y, "", 0);
+  } else {
+    editor_row *row = &EDITOR.row[EDITOR.cursor_y];
+    insert_editor_row_at(EDITOR.cursor_y + 1, &row->chars[EDITOR.cursor_x],
+                         row->size - EDITOR.cursor_x);
+
+    row = &EDITOR.row[EDITOR.cursor_y];
+    row->size = EDITOR.cursor_x;
+    row->chars[row->size] = '\0';
+    update_render_row(row);
+  }
+
+  EDITOR.cursor_y++;
+  EDITOR.cursor_x = 0;
 }
 
 void delete_char() {
@@ -334,7 +356,7 @@ void open_file(char *filename) {
     while (line_length > 0 &&
            (line[line_length - 1] == '\r' || line[line_length - 1] == '\n'))
       line_length--;
-    append_editor_row(line, line_length);
+    insert_editor_row_at(EDITOR.number_of_rows, line, line_length);
   }
 
   free(line);
@@ -514,7 +536,7 @@ void process_keypress() {
 
   switch (key_pressed) {
   case '\r':
-    // TODO
+    insert_new_line();
     break;
 
   case CTRL_KEY('q'):
