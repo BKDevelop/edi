@@ -369,8 +369,9 @@ void open_file(char *filename) {
 }
 
 void save_file() {
-  if (EDITOR.filename == NULL)
-    return;
+  if (EDITOR.filename == NULL) {
+    EDITOR.filename = editor_prompt("Save as: %s");
+  }
 
   int length;
   char *write_buffer = editor_row_to_string(&length);
