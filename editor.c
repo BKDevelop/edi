@@ -17,7 +17,8 @@
 #define EDI_VERSION "0.0.1"
 #define EDI_TAB_STOP 8
 #define CTRL_KEY(k) ((k)&0x1f)
-#define EDI_QUIT_TIMES 2;
+#define EDI_QUIT_TIMES 2
+#define ENTER_KEY '\r'
 
 enum editor_keys {
   BACKSPACE = 127,
@@ -65,6 +66,8 @@ struct append_buffer;
 int read_keypress();
 void append_buffer_append();
 void set_status_message(const char *fmt, ...);
+void refresh_screen();
+char *editor_prompt(char *prompt);
 
 /* terminal configuration */
 
@@ -353,8 +356,8 @@ void open_file(char *filename) {
   ssize_t line_length;
 
   while ((line_length = getline(&line, &line_cap, file)) != -1) {
-    while (line_length > 0 &&
-           (line[line_length - 1] == '\r' || line[line_length - 1] == '\n'))
+    while (line_length > 0 && (line[line_length - 1] == ENTER_KEY ||
+                               line[line_length - 1] == '\n'))
       line_length--;
     insert_editor_row_at(EDITOR.number_of_rows, line, line_length);
   }
@@ -413,6 +416,36 @@ void append_buffer_append(struct append_buffer *ab, const char *append_s,
 void append_buffer_free(struct append_buffer *ab) { free(ab->b); }
 
 /* input */
+
+char *editor_prompt(char *prompt) {
+  size_t buffer_max_length = 128;
+  char *buffer = malloc(buffer_max_length);
+
+  size_t buffer_length = 0;
+  buffer[0] = '\0';
+
+  while (true) {
+    set_status_message(prompt, buffer);
+    refresh_screen();
+
+    int c = read_keypress();
+
+    if (c == ENTER_KEY) {
+      if (buffer_length != 0) {
+        set_status_message("");
+        return buffer;
+      }
+    } else if (!iscntrl(c) && c < 128) {
+      if (buffer_length == buffer_max_length - 1) {
+        buffer_max_length *= 2;
+        buffer = realloc(buffer, buffer_max_length);
+      }
+      buffer[buffer_length] = c;
+      buffer_length++;
+      buffer[buffer_length] = '\0';
+    }
+  }
+}
 
 void move_cursor(int key_pressed) {
   editor_row *row = (EDITOR.cursor_y >= EDITOR.number_of_rows)
@@ -535,7 +568,7 @@ void process_keypress() {
   int key_pressed = read_keypress();
 
   switch (key_pressed) {
-  case '\r':
+  case ENTER_KEY:
     insert_new_line();
     break;
 
