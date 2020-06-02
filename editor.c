@@ -440,6 +440,11 @@ char *editor_prompt(char *prompt) {
       free(buffer);
       return NULL;
 
+    } else if (c == BACKSPACE || c == CTRL_KEY('h') || c == DEL_KEY) {
+      if (buffer_length != 0) {
+        buffer_length--;
+        buffer[buffer_length] = '\0';
+      }
     } else if (c == ENTER_KEY) {
       if (buffer_length != 0) {
         set_status_message("");
