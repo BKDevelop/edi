@@ -371,6 +371,10 @@ void open_file(char *filename) {
 void save_file() {
   if (EDITOR.filename == NULL) {
     EDITOR.filename = editor_prompt("Save as: %s");
+    if (EDITOR.filename == NULL) {
+      set_status_message("Saving aborted...");
+      return;
+    }
   }
 
   int length;
@@ -431,11 +435,17 @@ char *editor_prompt(char *prompt) {
 
     int c = read_keypress();
 
-    if (c == ENTER_KEY) {
+    if (c == '\x1b') {
+      set_status_message("");
+      free(buffer);
+      return NULL;
+
+    } else if (c == ENTER_KEY) {
       if (buffer_length != 0) {
         set_status_message("");
         return buffer;
       }
+
     } else if (!iscntrl(c) && c < 128) {
       if (buffer_length == buffer_max_length - 1) {
         buffer_max_length *= 2;
