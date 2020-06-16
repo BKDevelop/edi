@@ -177,6 +177,7 @@ int cursor_x_to_render_x(editor_row *row, int cursor_x) {
     }
     render_cursor_x++;
   }
+
   return render_cursor_x;
 }
 
@@ -396,6 +397,33 @@ void save_file() {
 
   free(write_buffer);
   set_status_message("Error while saving: %s", strerror(errno));
+}
+
+/* find */
+
+void editor_find() {
+  char *query = editor_prompt("Search: %s");
+  if (query == NULL)
+    return;
+
+  bool found = false;
+
+  for (int i = 0; i < EDITOR.number_of_rows; i++) {
+    editor_row *row = &EDITOR.row[i];
+    char *match = strstr(row->render, query);
+
+    if (match) {
+      EDITOR.cursor_y = i;
+      EDITOR.cursor_x = match - row->render;
+      EDITOR.row_offset = EDITOR.number_of_rows;
+      break;
+    }
+  }
+
+  if (!found)
+    set_status_message("\'%s\' not found.");
+
+  free(query);
 }
 /*  append buffer */
 
@@ -643,6 +671,10 @@ void process_keypress() {
   case '\x1b':
     break;
 
+  case CTRL_KEY('f'):
+    editor_find();
+    break;
+
   case CTRL_KEY('s'):
     save_file();
     break;
@@ -814,7 +846,7 @@ int main(int argc, char *argv[]) {
     open_file(argv[1]);
   }
 
-  set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit");
+  set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
   while (true) {
     refresh_screen();
     process_keypress();
